@@ -20,11 +20,16 @@ package org.apache.flink.cdc.composer.flink;
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.configuration.Configuration;
+import org.apache.flink.cdc.common.event.DataChangeEvent;
 import org.apache.flink.cdc.common.event.Event;
+import org.apache.flink.cdc.common.function.HashFunctionProvider;
+import org.apache.flink.cdc.common.pipeline.HashFunctionStrategy;
 import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.common.pipeline.RuntimeExecutionMode;
 import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
 import org.apache.flink.cdc.common.sink.DataSink;
+import org.apache.flink.cdc.common.sink.DefaultDataChangeEventHashFunctionProvider;
+import org.apache.flink.cdc.common.sink.TableIdHashFunctionProvider;
 import org.apache.flink.cdc.common.source.DataSource;
 import org.apache.flink.cdc.composer.PipelineComposer;
 import org.apache.flink.cdc.composer.PipelineExecution;
@@ -48,6 +53,7 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -169,6 +175,10 @@ public class FlinkPipelineComposer implements PipelineComposer {
         DataSink dataSink =
                 sinkTranslator.createDataSink(pipelineDef.getSink(), pipelineDefConfig, env);
 
+        // Resolve HashFunctionProvider based on pipeline configuration
+        HashFunctionProvider<DataChangeEvent> hashFunctionProvider =
+                resolveHashFunctionProvider(pipelineDefConfig, dataSink, parallelism);
+
         boolean isParallelMetadataSource = dataSource.isParallelMetadataSource();
 
         // O ---> Source
@@ -205,10 +215,7 @@ public class FlinkPipelineComposer implements PipelineComposer {
             // PostTransform -> Partitioning
             DataStream<PartitioningEvent> partitionedStream =
                     partitioningTranslator.translateDistributed(
-                            stream,
-                            parallelism,
-                            parallelism,
-                            dataSink.getDataChangeEventHashFunctionProvider(parallelism));
+                            stream, parallelism, parallelism, hashFunctionProvider);
 
             // Partitioning -> Schema Operator
             stream =
@@ -247,7 +254,7 @@ public class FlinkPipelineComposer implements PipelineComposer {
                             parallelism,
                             isBatchMode,
                             schemaOperatorIDGenerator.generate(),
-                            dataSink.getDataChangeEventHashFunctionProvider(parallelism),
+                            hashFunctionProvider,
                             operatorUidGenerator);
         }
 
@@ -290,6 +297,41 @@ public class FlinkPipelineComposer implements PipelineComposer {
             return Optional.empty();
         }
         return Optional.of(container);
+    }
+
+    /**
+     * Resolves the {@link HashFunctionProvider} to use for partitioning based on pipeline
+     * configuration.
+     *
+     * <p>If {@code partitioning.strategy} is explicitly set in the pipeline config, the
+     * corresponding provider will be returned. Otherwise, falls back to the sink-provided provider
+     * (default behavior).
+     *
+     * @param pipelineConfig the pipeline configuration
+     * @param dataSink the data sink
+     * @param parallelism the pipeline parallelism
+     * @return the resolved HashFunctionProvider
+     */
+    private HashFunctionProvider<DataChangeEvent> resolveHashFunctionProvider(
+            Configuration pipelineConfig, DataSink dataSink, int parallelism) {
+        HashFunctionStrategy strategy =
+                pipelineConfig.get(PipelineOptions.PIPELINE_PARTITIONING_STRATEGY);
+        if (strategy == null) {
+            // Fallback to sink-provided provider (default behavior)
+            return dataSink.getDataChangeEventHashFunctionProvider(parallelism);
+        }
+
+        switch (strategy) {
+            case PRIMARY_KEY:
+                return new DefaultDataChangeEventHashFunctionProvider();
+            case TABLE_ID:
+                return new TableIdHashFunctionProvider();
+            default:
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Unknown hash function strategy: %s. Allowed values are: %s",
+                                strategy, Arrays.toString(HashFunctionStrategy.values())));
+        }
     }
 
     @VisibleForTesting

@@ -22,6 +22,7 @@ import org.apache.flink.cdc.common.configuration.Configuration;
 import org.apache.flink.cdc.common.factories.DataSinkFactory;
 import org.apache.flink.cdc.common.factories.DataSourceFactory;
 import org.apache.flink.cdc.common.factories.FactoryHelper;
+import org.apache.flink.cdc.common.pipeline.HashFunctionStrategy;
 import org.apache.flink.cdc.common.pipeline.PipelineOptions;
 import org.apache.flink.cdc.common.sink.DataSink;
 import org.apache.flink.cdc.common.sink.EventSinkProvider;
@@ -208,10 +209,21 @@ class FlinkPipelineComposerTest {
         Configuration configuration3 = new Configuration();
         configuration3.set(PipelineOptions.PIPELINE_OPERATOR_UID_PREFIX, "junit");
 
+        // Test HashFunctionStrategy configurations
+        Configuration configuration4 = new Configuration();
+        configuration4.set(
+                PipelineOptions.PIPELINE_PARTITIONING_STRATEGY, HashFunctionStrategy.PRIMARY_KEY);
+
+        Configuration configuration5 = new Configuration();
+        configuration5.set(
+                PipelineOptions.PIPELINE_PARTITIONING_STRATEGY, HashFunctionStrategy.TABLE_ID);
+
         return Stream.of(
                 Arguments.of(configuration1),
                 Arguments.of(configuration2),
-                Arguments.of(configuration3));
+                Arguments.of(configuration3),
+                Arguments.of(configuration4),
+                Arguments.of(configuration5));
     }
 
     PipelineDef buildPipelineDefinitionFromConfiguration(Configuration pipelineConfig) {

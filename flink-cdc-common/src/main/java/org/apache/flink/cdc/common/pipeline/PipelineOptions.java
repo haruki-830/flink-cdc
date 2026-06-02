@@ -136,5 +136,24 @@ public class PipelineOptions {
                     .withDescription(
                             "The timeout time for SchemaOperator to wait downstream SchemaChangeEvent applying finished, the default value is 3 minutes.");
 
+    public static final ConfigOption<HashFunctionStrategy> PIPELINE_PARTITIONING_STRATEGY =
+            ConfigOptions.key("partitioning.strategy")
+                    .enumType(HashFunctionStrategy.class)
+                    .noDefaultValue()
+                    .withDescription(
+                            Description.builder()
+                                    .text("Partitioning strategy for DataChangeEvent routing. ")
+                                    .linebreak()
+                                    .add(
+                                            ListElement.list(
+                                                    text(
+                                                            "PRIMARY_KEY: Hash by TableId and primary keys. Events from the same table may be distributed across multiple subtasks for load balancing."),
+                                                    text(
+                                                            "TABLE_ID: Hash by TableId only. All events from the same table will land on the same subtask, ensuring per-table ordering semantics.")))
+                                    .linebreak()
+                                    .text(
+                                            "When not set, the HashFunctionProvider from the sink will be used (default behavior).")
+                                    .build());
+
     private PipelineOptions() {}
 }

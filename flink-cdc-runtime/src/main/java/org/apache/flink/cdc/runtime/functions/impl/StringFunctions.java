@@ -20,12 +20,12 @@ package org.apache.flink.cdc.runtime.functions.impl;
 import org.apache.flink.cdc.common.types.variant.BinaryVariantInternalBuilder;
 import org.apache.flink.cdc.common.types.variant.Variant;
 
+import org.apache.calcite.runtime.SqlFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /** String built-in functions. */
 public class StringFunctions {
@@ -65,12 +65,48 @@ public class StringFunctions {
         return String.join("", str);
     }
 
-    public static boolean like(String str, String regex) {
-        return Pattern.compile(regex).matcher(str).find();
+    public static Boolean like(String str, String pattern) {
+        if (str == null || pattern == null) {
+            return null;
+        }
+        return SqlFunctions.like(str, pattern);
     }
 
-    public static boolean notLike(String str, String regex) {
-        return !like(str, regex);
+    public static Boolean like(String str, String pattern, String escape) {
+        if (str == null || pattern == null || escape == null) {
+            return null;
+        }
+        return SqlFunctions.like(str, pattern, escape);
+    }
+
+    public static Boolean notLike(String str, String pattern) {
+        return LogicalFunctions.not(like(str, pattern));
+    }
+
+    public static Boolean notLike(String str, String pattern, String escape) {
+        return LogicalFunctions.not(like(str, pattern, escape));
+    }
+
+    public static Boolean similarTo(String str, String pattern) {
+        if (str == null || pattern == null) {
+            return null;
+        }
+        return SqlFunctions.similar(str, pattern);
+    }
+
+    public static Boolean similarTo(String str, String pattern, String escape) {
+        if (str == null || pattern == null || escape == null) {
+            return null;
+        }
+        return SqlFunctions.similar(str, pattern, escape);
+    }
+
+    public static Boolean notSimilarTo(String str, String pattern) {
+        return LogicalFunctions.not(similarTo(str, pattern));
+    }
+
+    public static Boolean notSimilarTo(String str, String pattern, String escape) {
+        return LogicalFunctions.not(similarTo(str, pattern, escape));
     }
 
     public static String substr(String str, int beginIndex) {

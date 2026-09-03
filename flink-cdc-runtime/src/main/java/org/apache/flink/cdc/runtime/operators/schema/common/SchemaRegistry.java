@@ -19,13 +19,17 @@ package org.apache.flink.cdc.runtime.operators.schema.common;
 
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.annotation.VisibleForTesting;
+import org.apache.flink.cdc.common.event.CreateTableEvent;
+import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.pipeline.RouteMode;
 import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
+import org.apache.flink.cdc.common.pipeline.SchemaCompatibilityMode;
 import org.apache.flink.cdc.common.route.RouteRule;
 import org.apache.flink.cdc.common.route.TableIdRouter;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
+import org.apache.flink.cdc.common.sink.SchemaAwareMetadataApplier;
 import org.apache.flink.cdc.runtime.operators.schema.common.event.FlushSuccessEvent;
 import org.apache.flink.cdc.runtime.operators.schema.common.event.GetEvolvedSchemaRequest;
 import org.apache.flink.cdc.runtime.operators.schema.common.event.GetEvolvedSchemaResponse;
@@ -90,6 +94,7 @@ public abstract class SchemaRegistry implements OperatorCoordinator, Coordinatio
     protected final List<RouteRule> routingRules;
     protected final RouteMode routeMode;
     protected final SchemaChangeBehavior behavior;
+    protected final SchemaCompatibilityMode schemaCompatibilityMode;
 
     // -------------------------
     // Dynamically initialized transient fields (after coordinator starts)
@@ -99,6 +104,7 @@ public abstract class SchemaRegistry implements OperatorCoordinator, Coordinatio
     protected transient Map<Integer, Throwable> failedReasons;
     protected transient SchemaManager schemaManager;
     protected transient TableIdRouter router;
+    protected transient SchemaReconciler schemaReconciler;
 
     protected SchemaRegistry(
             OperatorCoordinator.Context context,
@@ -108,6 +114,7 @@ public abstract class SchemaRegistry implements OperatorCoordinator, Coordinatio
             List<RouteRule> routingRules,
             RouteMode routeMode,
             SchemaChangeBehavior schemaChangeBehavior,
+            SchemaCompatibilityMode schemaCompatibilityMode,
             Duration rpcTimeout) {
         this.context = context;
         this.operatorName = operatorName;
@@ -117,6 +124,7 @@ public abstract class SchemaRegistry implements OperatorCoordinator, Coordinatio
         this.routeMode = routeMode;
         this.rpcTimeout = rpcTimeout;
         this.behavior = schemaChangeBehavior;
+        this.schemaCompatibilityMode = schemaCompatibilityMode;
     }
 
     // ---------------
@@ -132,6 +140,18 @@ public abstract class SchemaRegistry implements OperatorCoordinator, Coordinatio
             this.schemaManager = new SchemaManager();
         }
         this.router = new TableIdRouter(routingRules, routeMode);
+        if (schemaCompatibilityMode == SchemaCompatibilityMode.RECONCILE
+                && metadataApplier instanceof SchemaAwareMetadataApplier) {
+            this.schemaReconciler =
+                    new SchemaReconciler((SchemaAwareMetadataApplier) metadataApplier, behavior);
+        }
+    }
+
+    /** Tries optional target schema reconciliation without changing the sink's failure behavior. */
+    protected void reconcileSchemaIfNeeded(SchemaChangeEvent schemaChangeEvent) {
+        if (schemaReconciler != null && schemaChangeEvent instanceof CreateTableEvent) {
+            schemaReconciler.reconcile((CreateTableEvent) schemaChangeEvent);
+        }
     }
 
     @Override

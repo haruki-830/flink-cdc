@@ -24,9 +24,13 @@ import org.apache.flink.cdc.common.event.DropColumnEvent;
 import org.apache.flink.cdc.common.event.RenameColumnEvent;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.exceptions.SchemaEvolveException;
+import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
 import org.apache.flink.cdc.common.schema.Column;
+import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.types.DataType;
+import org.apache.flink.cdc.runtime.operators.schema.common.SchemaReconciler;
+import org.apache.flink.cdc.runtime.operators.schema.common.SchemaReconciler.ReconcileResult;
 
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
@@ -263,6 +267,69 @@ class PaimonMetadataApplierTest {
                         catalog.getTable(Identifier.fromString("test.table_with_upper_case"))
                                 .rowType())
                 .isEqualTo(tableSchema);
+    }
+
+    @Test
+    void testBestEffortSchemaReconciliation()
+            throws Catalog.DatabaseNotEmptyException,
+                    Catalog.DatabaseNotExistException,
+                    SchemaEvolveException {
+        initialize("filesystem");
+        PaimonMetadataApplier metadataApplier = new PaimonMetadataApplier(catalogOptions);
+        TableId tableId = TableId.parse("test.reconcile_table");
+        Schema targetSchema =
+                Schema.newBuilder()
+                        .physicalColumn(
+                                "id",
+                                org.apache.flink.cdc.common.types.DataTypes.STRING().notNull())
+                        .physicalColumn("amount", org.apache.flink.cdc.common.types.DataTypes.INT())
+                        .primaryKey("id")
+                        .build();
+        metadataApplier.applySchemaChange(new CreateTableEvent(tableId, targetSchema));
+
+        Schema pipelineSchema =
+                Schema.newBuilder()
+                        .physicalColumn(
+                                "id",
+                                org.apache.flink.cdc.common.types.DataTypes.STRING().notNull())
+                        .physicalColumn(
+                                "amount", org.apache.flink.cdc.common.types.DataTypes.BIGINT())
+                        .physicalColumn(
+                                "description",
+                                org.apache.flink.cdc.common.types.DataTypes.STRING().notNull())
+                        .primaryKey("id")
+                        .build();
+        CreateTableEvent createTableEvent = new CreateTableEvent(tableId, pipelineSchema);
+        SchemaReconciler reconciler =
+                new SchemaReconciler(metadataApplier, SchemaChangeBehavior.LENIENT);
+
+        Assertions.assertThat(reconciler.reconcile(createTableEvent))
+                .isEqualTo(ReconcileResult.REPAIRED);
+        metadataApplier.applySchemaChange(createTableEvent);
+        Assertions.assertThat(reconciler.reconcile(createTableEvent))
+                .isEqualTo(ReconcileResult.NO_ACTION);
+        Assertions.assertThat(metadataApplier.getTargetTableSchema(tableId))
+                .get()
+                .satisfies(
+                        schema -> {
+                            Assertions.assertThat(schema.getColumns())
+                                    .containsExactly(
+                                            Column.physicalColumn(
+                                                    "id",
+                                                    org.apache.flink.cdc.common.types.DataTypes
+                                                            .STRING()
+                                                            .notNull()),
+                                            Column.physicalColumn(
+                                                    "amount",
+                                                    org.apache.flink.cdc.common.types.DataTypes
+                                                            .BIGINT()),
+                                            Column.physicalColumn(
+                                                    "description",
+                                                    org.apache.flink.cdc.common.types.DataTypes
+                                                            .STRING()));
+                            Assertions.assertThat(schema.primaryKeys()).containsExactly("id");
+                            Assertions.assertThat(schema.partitionKeys()).isEmpty();
+                        });
     }
 
     @ParameterizedTest

@@ -25,13 +25,16 @@ import org.apache.flink.cdc.common.event.SchemaChangeEvent;
 import org.apache.flink.cdc.common.event.TableId;
 import org.apache.flink.cdc.common.pipeline.RouteMode;
 import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
+import org.apache.flink.cdc.common.pipeline.SchemaCompatibilityMode;
 import org.apache.flink.cdc.common.route.RouteRule;
 import org.apache.flink.cdc.common.route.TableIdRouter;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
+import org.apache.flink.cdc.common.sink.SchemaAwareMetadataApplier;
 import org.apache.flink.cdc.runtime.operators.AbstractStreamOperatorAdapter;
 import org.apache.flink.cdc.runtime.operators.schema.common.SchemaDerivator;
 import org.apache.flink.cdc.runtime.operators.schema.common.SchemaManager;
+import org.apache.flink.cdc.runtime.operators.schema.common.SchemaReconciler;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
@@ -60,12 +63,15 @@ public class BatchSchemaOperator extends AbstractStreamOperatorAdapter<Event>
     private final String timezone;
     private final List<RouteRule> routingRules;
     private final RouteMode routeMode;
+    private final SchemaChangeBehavior schemaChangeBehavior;
+    private final SchemaCompatibilityMode schemaCompatibilityMode;
 
     // Transient fields that are set during open()
     private transient volatile Map<TableId, Schema> originalSchemaMap;
     private transient volatile Map<TableId, Schema> evolvedSchemaMap;
     private transient TableIdRouter router;
     private transient SchemaDerivator derivator;
+    private transient SchemaReconciler schemaReconciler;
     protected transient SchemaManager schemaManager;
     protected MetadataApplier metadataApplier;
     private boolean alreadyMergedCreateTableTables = false;
@@ -75,11 +81,29 @@ public class BatchSchemaOperator extends AbstractStreamOperatorAdapter<Event>
             RouteMode routeMode,
             MetadataApplier metadataApplier,
             String timezone) {
+        this(
+                routingRules,
+                routeMode,
+                metadataApplier,
+                SchemaChangeBehavior.IGNORE,
+                SchemaCompatibilityMode.SINK_DEFINED,
+                timezone);
+    }
+
+    public BatchSchemaOperator(
+            List<RouteRule> routingRules,
+            RouteMode routeMode,
+            MetadataApplier metadataApplier,
+            SchemaChangeBehavior schemaChangeBehavior,
+            SchemaCompatibilityMode schemaCompatibilityMode,
+            String timezone) {
         this.chainingStrategy = ChainingStrategy.ALWAYS;
         this.timezone = timezone;
         this.routingRules = routingRules;
         this.routeMode = routeMode;
         this.metadataApplier = metadataApplier;
+        this.schemaChangeBehavior = schemaChangeBehavior;
+        this.schemaCompatibilityMode = schemaCompatibilityMode;
     }
 
     @Override
@@ -98,6 +122,12 @@ public class BatchSchemaOperator extends AbstractStreamOperatorAdapter<Event>
         this.router = new TableIdRouter(routingRules, routeMode);
         this.derivator = new SchemaDerivator();
         this.schemaManager = new SchemaManager(SchemaChangeBehavior.IGNORE);
+        if (schemaCompatibilityMode == SchemaCompatibilityMode.RECONCILE
+                && metadataApplier instanceof SchemaAwareMetadataApplier) {
+            this.schemaReconciler =
+                    new SchemaReconciler(
+                            (SchemaAwareMetadataApplier) metadataApplier, schemaChangeBehavior);
+        }
     }
 
     /**
@@ -170,6 +200,9 @@ public class BatchSchemaOperator extends AbstractStreamOperatorAdapter<Event>
 
     private boolean applyAndUpdateEvolvedSchemaChange(SchemaChangeEvent schemaChangeEvent) {
         try {
+            if (schemaReconciler != null && schemaChangeEvent instanceof CreateTableEvent) {
+                schemaReconciler.reconcile((CreateTableEvent) schemaChangeEvent);
+            }
             metadataApplier.applySchemaChange(schemaChangeEvent);
             schemaManager.applyEvolvedSchemaChange(schemaChangeEvent);
             LOG.info(

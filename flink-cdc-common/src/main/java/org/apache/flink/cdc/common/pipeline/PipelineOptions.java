@@ -72,6 +72,23 @@ public class PipelineOptions {
                                                             "EXCEPTION: Throw an exception to terminate the sync pipeline.")))
                                     .build());
 
+    public static final ConfigOption<SchemaCompatibilityMode> PIPELINE_SCHEMA_COMPATIBILITY_MODE =
+            ConfigOptions.key("schema.compatibility.mode")
+                    .enumType(SchemaCompatibilityMode.class)
+                    .defaultValue(SchemaCompatibilityMode.SINK_DEFINED)
+                    .withDescription(
+                            Description.builder()
+                                    .text(
+                                            "Behavior for coordinating the pipeline schema with an existing target table. ")
+                                    .linebreak()
+                                    .add(
+                                            ListElement.list(
+                                                    text(
+                                                            "SINK_DEFINED: Preserve the sink's existing schema compatibility behavior."),
+                                                    text(
+                                                            "RECONCILE: During CreateTableEvent handling, try to add missing columns and safely widen narrow target column types, then delegate unresolved differences to the sink.")))
+                                    .build());
+
     public static final ConfigOption<RouteMode> PIPELINE_ROUTE_MODE =
             ConfigOptions.key("route-mode")
                     .enumType(RouteMode.class)

@@ -25,6 +25,7 @@ import org.apache.flink.cdc.common.exceptions.SchemaEvolveException;
 import org.apache.flink.cdc.common.exceptions.UnsupportedSchemaChangeEventException;
 import org.apache.flink.cdc.common.pipeline.RouteMode;
 import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
+import org.apache.flink.cdc.common.pipeline.SchemaCompatibilityMode;
 import org.apache.flink.cdc.common.route.RouteRule;
 import org.apache.flink.cdc.common.schema.Schema;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
@@ -104,6 +105,28 @@ public class SchemaCoordinator extends SchemaRegistry {
             RouteMode routeMode,
             SchemaChangeBehavior schemaChangeBehavior,
             Duration rpcTimeout) {
+        this(
+                operatorName,
+                context,
+                coordinatorExecutor,
+                metadataApplier,
+                routes,
+                routeMode,
+                schemaChangeBehavior,
+                SchemaCompatibilityMode.SINK_DEFINED,
+                rpcTimeout);
+    }
+
+    public SchemaCoordinator(
+            String operatorName,
+            OperatorCoordinator.Context context,
+            ExecutorService coordinatorExecutor,
+            MetadataApplier metadataApplier,
+            List<RouteRule> routes,
+            RouteMode routeMode,
+            SchemaChangeBehavior schemaChangeBehavior,
+            SchemaCompatibilityMode schemaCompatibilityMode,
+            Duration rpcTimeout) {
         super(
                 context,
                 operatorName,
@@ -112,6 +135,7 @@ public class SchemaCoordinator extends SchemaRegistry {
                 routes,
                 routeMode,
                 schemaChangeBehavior,
+                schemaCompatibilityMode,
                 rpcTimeout);
         this.schemaChangeThreadPool = Executors.newSingleThreadExecutor();
     }
@@ -437,6 +461,7 @@ public class SchemaCoordinator extends SchemaRegistry {
 
     private boolean applyAndUpdateEvolvedSchemaChange(SchemaChangeEvent schemaChangeEvent) {
         try {
+            reconcileSchemaIfNeeded(schemaChangeEvent);
             metadataApplier.applySchemaChange(schemaChangeEvent);
             schemaManager.applyEvolvedSchemaChange(schemaChangeEvent);
             LOG.info(

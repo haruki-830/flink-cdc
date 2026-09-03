@@ -22,6 +22,7 @@ import org.apache.flink.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.pipeline.RouteMode;
 import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
+import org.apache.flink.cdc.common.pipeline.SchemaCompatibilityMode;
 import org.apache.flink.cdc.common.route.RouteRule;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.common.utils.Preconditions;
@@ -42,6 +43,7 @@ import java.util.List;
 @Internal
 public class SchemaOperatorTranslator {
     private final SchemaChangeBehavior schemaChangeBehavior;
+    private final SchemaCompatibilityMode schemaCompatibilityMode;
     private final String schemaOperatorUid;
     private final Duration rpcTimeOut;
     private final String timezone;
@@ -51,7 +53,22 @@ public class SchemaOperatorTranslator {
             String schemaOperatorUid,
             Duration rpcTimeOut,
             String timezone) {
+        this(
+                schemaChangeBehavior,
+                SchemaCompatibilityMode.SINK_DEFINED,
+                schemaOperatorUid,
+                rpcTimeOut,
+                timezone);
+    }
+
+    public SchemaOperatorTranslator(
+            SchemaChangeBehavior schemaChangeBehavior,
+            SchemaCompatibilityMode schemaCompatibilityMode,
+            String schemaOperatorUid,
+            Duration rpcTimeOut,
+            String timezone) {
         this.schemaChangeBehavior = schemaChangeBehavior;
+        this.schemaCompatibilityMode = schemaCompatibilityMode;
         this.schemaOperatorUid = schemaOperatorUid;
         this.rpcTimeOut = rpcTimeOut;
         this.timezone = timezone;
@@ -146,6 +163,7 @@ public class SchemaOperatorTranslator {
                                 routeMode,
                                 rpcTimeOut,
                                 schemaChangeBehavior,
+                                schemaCompatibilityMode,
                                 timezone));
         stream.uid(schemaOperatorUid).setParallelism(parallelism);
         return stream;
@@ -171,7 +189,12 @@ public class SchemaOperatorTranslator {
                         "SchemaBatchOperator",
                         new EventTypeInfo(),
                         new BatchSchemaOperator(
-                                routingRules, routeMode, metadataApplier, timezone));
+                                routingRules,
+                                routeMode,
+                                metadataApplier,
+                                schemaChangeBehavior,
+                                schemaCompatibilityMode,
+                                timezone));
         stream.uid(schemaOperatorUid).setParallelism(parallelism);
         return stream;
     }
@@ -213,6 +236,7 @@ public class SchemaOperatorTranslator {
                                 routeMode,
                                 rpcTimeOut,
                                 schemaChangeBehavior,
+                                schemaCompatibilityMode,
                                 timezone))
                 .uid(schemaOperatorUid)
                 .setParallelism(parallelism);

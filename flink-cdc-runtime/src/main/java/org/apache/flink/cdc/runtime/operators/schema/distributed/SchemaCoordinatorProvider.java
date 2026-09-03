@@ -20,6 +20,7 @@ package org.apache.flink.cdc.runtime.operators.schema.distributed;
 import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.pipeline.RouteMode;
 import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
+import org.apache.flink.cdc.common.pipeline.SchemaCompatibilityMode;
 import org.apache.flink.cdc.common.route.RouteRule;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.cdc.runtime.operators.schema.common.CoordinatorExecutorThreadFactory;
@@ -42,6 +43,7 @@ public class SchemaCoordinatorProvider implements OperatorCoordinator.Provider {
     private final List<RouteRule> routingRules;
     private final RouteMode routeMode;
     private final SchemaChangeBehavior schemaChangeBehavior;
+    private final SchemaCompatibilityMode schemaCompatibilityMode;
     private final Duration rpcTimeout;
 
     public SchemaCoordinatorProvider(
@@ -52,12 +54,33 @@ public class SchemaCoordinatorProvider implements OperatorCoordinator.Provider {
             RouteMode routeMode,
             SchemaChangeBehavior schemaChangeBehavior,
             Duration rpcTimeout) {
+        this(
+                operatorID,
+                operatorName,
+                metadataApplier,
+                routingRules,
+                routeMode,
+                schemaChangeBehavior,
+                SchemaCompatibilityMode.SINK_DEFINED,
+                rpcTimeout);
+    }
+
+    public SchemaCoordinatorProvider(
+            OperatorID operatorID,
+            String operatorName,
+            MetadataApplier metadataApplier,
+            List<RouteRule> routingRules,
+            RouteMode routeMode,
+            SchemaChangeBehavior schemaChangeBehavior,
+            SchemaCompatibilityMode schemaCompatibilityMode,
+            Duration rpcTimeout) {
         this.operatorID = operatorID;
         this.operatorName = operatorName;
         this.metadataApplier = metadataApplier;
         this.routingRules = routingRules;
         this.routeMode = routeMode;
         this.schemaChangeBehavior = schemaChangeBehavior;
+        this.schemaCompatibilityMode = schemaCompatibilityMode;
         this.rpcTimeout = rpcTimeout;
     }
 
@@ -81,6 +104,7 @@ public class SchemaCoordinatorProvider implements OperatorCoordinator.Provider {
                 routingRules,
                 routeMode,
                 schemaChangeBehavior,
+                schemaCompatibilityMode,
                 rpcTimeout);
     }
 }

@@ -18,19 +18,11 @@
 package org.apache.flink.cdc.runtime.parser;
 
 import org.apache.flink.api.common.io.ParseException;
-import org.apache.flink.cdc.common.model.AiModelClient;
-import org.apache.flink.cdc.common.model.abilities.SupportsEmbedding;
-import org.apache.flink.cdc.common.model.abilities.SupportsImageEmbedding;
-import org.apache.flink.cdc.common.model.abilities.SupportsImageTextGeneration;
-import org.apache.flink.cdc.common.model.abilities.SupportsTextGeneration;
 import org.apache.flink.cdc.common.pipeline.DecimalPrecisionMode;
 import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.source.SupportedMetadataColumn;
 import org.apache.flink.cdc.common.types.DataType;
 import org.apache.flink.cdc.common.utils.Preconditions;
-import org.apache.flink.cdc.runtime.ai.AiEmbeddingFunctionDef;
-import org.apache.flink.cdc.runtime.ai.AiImageFunctionDef;
-import org.apache.flink.cdc.runtime.ai.AiTextFunctionDef;
 import org.apache.flink.cdc.runtime.operators.transform.ProjectionColumn;
 import org.apache.flink.cdc.runtime.operators.transform.UserDefinedFunctionDescriptor;
 import org.apache.flink.cdc.runtime.parser.metadata.AiFunctionSqlOperatorTable;
@@ -56,7 +48,6 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.impl.ScalarFunctionImpl;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
-import org.apache.calcite.sql.SqlCharStringLiteral;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIdentifier;
@@ -904,206 +895,6 @@ public class TransformParser {
             statement.append(filterExpression);
         }
         return parseSelect(statement.toString());
-    }
-
-    /** Validates model arguments and references in the supported AI functions. */
-    public static void validateAiModelReferences(
-            @Nullable String projection, @Nullable String filter, Set<String> declaredModelNames) {
-        validateAiModelReferences(projection, filter, declaredModelNames, Collections.emptySet());
-    }
-
-    /** Validates model arguments and references in AI functions not shadowed by a UDF. */
-    public static void validateAiModelReferences(
-            @Nullable String projection,
-            @Nullable String filter,
-            Set<String> declaredModelNames,
-            Set<String> userDefinedFunctionNames) {
-        if (!isNullOrWhitespaceOnly(projection)) {
-            validateAiModelReferences(
-                    parseProjectionExpression(projection),
-                    declaredModelNames,
-                    userDefinedFunctionNames);
-        }
-        if (!isNullOrWhitespaceOnly(filter)) {
-            validateAiModelReferences(
-                    parseFilterExpression(filter), declaredModelNames, userDefinedFunctionNames);
-        }
-    }
-
-    /** Validates that referenced models provide the capability required by each AI function. */
-    public static void validateAiModelCapabilities(
-            @Nullable String projection,
-            @Nullable String filter,
-            Map<String, AiModelClient> modelClients) {
-        validateAiModelCapabilities(projection, filter, modelClients, Collections.emptySet());
-    }
-
-    /** Validates model capabilities for AI functions not shadowed by a UDF. */
-    public static void validateAiModelCapabilities(
-            @Nullable String projection,
-            @Nullable String filter,
-            Map<String, AiModelClient> modelClients,
-            Set<String> userDefinedFunctionNames) {
-        if (!isNullOrWhitespaceOnly(projection)) {
-            validateAiModelCapabilities(
-                    parseProjectionExpression(projection), modelClients, userDefinedFunctionNames);
-        }
-        if (!isNullOrWhitespaceOnly(filter)) {
-            validateAiModelCapabilities(
-                    parseFilterExpression(filter), modelClients, userDefinedFunctionNames);
-        }
-    }
-
-    private static void validateAiModelReferences(
-            SqlNode node, Set<String> declaredModelNames, Set<String> userDefinedFunctionNames) {
-        if (node instanceof SqlCall) {
-            SqlCall call = (SqlCall) node;
-            String functionName = call.getOperator().getName();
-            if (isAiFunction(functionName)
-                    && !isUserDefinedFunction(functionName, userDefinedFunctionNames)) {
-                if (call.operandCount() == 0) {
-                    return;
-                }
-                String modelName = resolveAiModelName(call);
-                Preconditions.checkArgument(
-                        declaredModelNames.contains(modelName),
-                        "Model '%s' referenced by %s has not been declared.",
-                        modelName,
-                        call.getOperator().getName());
-            }
-            for (SqlNode operand : call.getOperandList()) {
-                if (operand != null) {
-                    validateAiModelReferences(
-                            operand, declaredModelNames, userDefinedFunctionNames);
-                }
-            }
-        } else if (node instanceof SqlNodeList) {
-            for (SqlNode child : (SqlNodeList) node) {
-                validateAiModelReferences(child, declaredModelNames, userDefinedFunctionNames);
-            }
-        }
-    }
-
-    private static void validateAiModelCapabilities(
-            SqlNode node,
-            Map<String, AiModelClient> modelClients,
-            Set<String> userDefinedFunctionNames) {
-        if (node instanceof SqlCall) {
-            SqlCall call = (SqlCall) node;
-            String functionName = call.getOperator().getName();
-            if (isAiFunction(functionName)
-                    && !isUserDefinedFunction(functionName, userDefinedFunctionNames)
-                    && call.operandCount() > 0) {
-                String modelName = resolveAiModelName(call);
-                AiModelClient modelClient = modelClients.get(modelName);
-                Preconditions.checkArgument(
-                        modelClient != null,
-                        "Model '%s' referenced by %s has not been declared.",
-                        modelName,
-                        functionName);
-                AiImageFunctionDef imageFunction = findImageAiFunction(functionName);
-                if (isTextAiFunction(functionName)) {
-                    Preconditions.checkArgument(
-                            modelClient instanceof SupportsTextGeneration,
-                            "Model '%s' referenced by %s does not support text generation.",
-                            modelName,
-                            functionName);
-                } else if (imageFunction != null) {
-                    validateImageAiModelCapability(
-                            imageFunction, modelClient, modelName, functionName);
-                } else {
-                    Preconditions.checkArgument(
-                            modelClient instanceof SupportsEmbedding,
-                            "Model '%s' referenced by %s does not support embedding.",
-                            modelName,
-                            functionName);
-                }
-            }
-            for (SqlNode operand : call.getOperandList()) {
-                if (operand != null) {
-                    validateAiModelCapabilities(operand, modelClients, userDefinedFunctionNames);
-                }
-            }
-        } else if (node instanceof SqlNodeList) {
-            for (SqlNode child : (SqlNodeList) node) {
-                validateAiModelCapabilities(child, modelClients, userDefinedFunctionNames);
-            }
-        }
-    }
-
-    private static void validateImageAiModelCapability(
-            AiImageFunctionDef function,
-            AiModelClient modelClient,
-            String modelName,
-            String functionName) {
-        switch (function.getCapability()) {
-            case IMAGE_TEXT_GENERATION:
-                Preconditions.checkArgument(
-                        modelClient instanceof SupportsImageTextGeneration,
-                        "Model '%s' referenced by %s does not support image text generation.",
-                        modelName,
-                        functionName);
-                break;
-            case IMAGE_EMBEDDING:
-                Preconditions.checkArgument(
-                        modelClient instanceof SupportsImageEmbedding,
-                        "Model '%s' referenced by %s does not support image embedding.",
-                        modelName,
-                        functionName);
-                break;
-            default:
-                throw new IllegalArgumentException(
-                        "Unsupported capability for image AI function " + functionName);
-        }
-    }
-
-    private static String resolveAiModelName(SqlCall call) {
-        SqlNode modelArgument = call.operand(0);
-        Preconditions.checkArgument(
-                modelArgument instanceof SqlCharStringLiteral,
-                "The model argument of %s must be a string constant, but was %s.",
-                call.getOperator().getName(),
-                modelArgument);
-        return ((SqlCharStringLiteral) modelArgument).getNlsString().getValue();
-    }
-
-    private static boolean isUserDefinedFunction(
-            String functionName, Set<String> userDefinedFunctionNames) {
-        return userDefinedFunctionNames.stream().anyMatch(functionName::equalsIgnoreCase);
-    }
-
-    private static boolean isAiFunction(String functionName) {
-        return isTextAiFunction(functionName)
-                || isEmbeddingAiFunction(functionName)
-                || findImageAiFunction(functionName) != null;
-    }
-
-    private static boolean isTextAiFunction(String functionName) {
-        for (AiTextFunctionDef function : AiTextFunctionDef.values()) {
-            if (function.getFunctionName().equalsIgnoreCase(functionName)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isEmbeddingAiFunction(String functionName) {
-        for (AiEmbeddingFunctionDef function : AiEmbeddingFunctionDef.values()) {
-            if (function.getFunctionName().equalsIgnoreCase(functionName)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    @Nullable
-    private static AiImageFunctionDef findImageAiFunction(String functionName) {
-        for (AiImageFunctionDef function : AiImageFunctionDef.values()) {
-            if (function.getFunctionName().equalsIgnoreCase(functionName)) {
-                return function;
-            }
-        }
-        return null;
     }
 
     public static boolean hasAsterisk(@Nullable String projection) {

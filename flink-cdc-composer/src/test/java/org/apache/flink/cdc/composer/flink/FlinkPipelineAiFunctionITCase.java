@@ -129,6 +129,20 @@ class FlinkPipelineAiFunctionITCase {
     }
 
     @Test
+    void testDynamicModelSelectionInProjection() throws Exception {
+        String[] output =
+                runAiFunctionTest(
+                        "id, content, "
+                                + "AI_COMPLETE(IF(id = 1, 'testModel', 'missingModel'), content, 'Complete the text') AS completed",
+                        List.of(ModelDef.of("testModel", "dummy", Collections.emptyMap())));
+
+        assertThat(output)
+                .containsExactly(
+                        "CreateTableEvent{tableId=default_namespace.default_schema.mytable1, schema=columns={`id` INT NOT NULL,`content` STRING,`completed` VARIANT}, primaryKeys=id, options=()}",
+                        "DataChangeEvent{tableId=default_namespace.default_schema.mytable1, before=[], after=[1, I love this product, {\"result\":\"dummy response\"}], op=INSERT, meta=()}");
+    }
+
+    @Test
     void testSpecializedTextAiFunctionsInProjection() throws Exception {
         String[] output =
                 runAiFunctionTest(

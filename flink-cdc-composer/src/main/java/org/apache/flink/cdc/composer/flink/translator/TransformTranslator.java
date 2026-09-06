@@ -35,17 +35,14 @@ import org.apache.flink.cdc.runtime.operators.transform.PostTransformOperator;
 import org.apache.flink.cdc.runtime.operators.transform.PostTransformOperatorBuilder;
 import org.apache.flink.cdc.runtime.operators.transform.PreTransformOperator;
 import org.apache.flink.cdc.runtime.operators.transform.PreTransformOperatorBuilder;
-import org.apache.flink.cdc.runtime.parser.TransformParser;
 import org.apache.flink.cdc.runtime.typeutils.EventTypeInfo;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -67,8 +64,6 @@ public class TransformTranslator {
         if (transforms.isEmpty()) {
             return input;
         }
-        validateModelReferences(
-                transforms, models, getUserDefinedFunctionNames(udfFunctions, models));
         return input.transform(
                 "Transform:Schema",
                 new EventTypeInfo(),
@@ -147,8 +142,6 @@ public class TransformTranslator {
                         .map(this::modelToUDFTuple)
                         .collect(Collectors.toList()));
         Map<String, AiModelClient> modelClients = loadModelClients(models, env);
-        validateModelCapabilities(
-                transforms, modelClients, getUserDefinedFunctionNames(udfFunctions, models));
         postTransformFunctionBuilder.addModelClients(modelClients);
         return input.transform(
                         "Transform:Data", new EventTypeInfo(), postTransformFunctionBuilder.build())
@@ -189,48 +182,6 @@ public class TransformTranslator {
             clients.put(model.getName(), factory.createClient(context));
         }
         return clients;
-    }
-
-    private void validateModelReferences(
-            List<TransformDef> transforms,
-            List<ModelDef> models,
-            Set<String> userDefinedFunctionNames) {
-        Set<String> clientModelNames =
-                models.stream()
-                        .filter(model -> !model.isLegacy())
-                        .map(ModelDef::getName)
-                        .collect(Collectors.toSet());
-        for (TransformDef transform : transforms) {
-            TransformParser.validateAiModelReferences(
-                    transform.getProjection(),
-                    transform.getFilter(),
-                    clientModelNames,
-                    userDefinedFunctionNames);
-        }
-    }
-
-    private void validateModelCapabilities(
-            List<TransformDef> transforms,
-            Map<String, AiModelClient> modelClients,
-            Set<String> userDefinedFunctionNames) {
-        for (TransformDef transform : transforms) {
-            TransformParser.validateAiModelCapabilities(
-                    transform.getProjection(),
-                    transform.getFilter(),
-                    modelClients,
-                    userDefinedFunctionNames);
-        }
-    }
-
-    private Set<String> getUserDefinedFunctionNames(
-            List<UdfDef> udfFunctions, List<ModelDef> models) {
-        Set<String> functionNames = new HashSet<>();
-        udfFunctions.stream().map(UdfDef::getName).forEach(functionNames::add);
-        models.stream()
-                .filter(ModelDef::isLegacy)
-                .map(ModelDef::getName)
-                .forEach(functionNames::add);
-        return functionNames;
     }
 
     private Tuple3<String, String, Map<String, String>> udfDefToUDFTuple(UdfDef udf) {

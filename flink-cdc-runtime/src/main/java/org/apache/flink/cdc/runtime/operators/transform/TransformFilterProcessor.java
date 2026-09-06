@@ -23,6 +23,7 @@ import org.apache.flink.cdc.common.model.AiModelClient;
 import org.apache.flink.cdc.common.pipeline.DecimalPrecisionMode;
 import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.source.SupportedMetadataColumn;
+import org.apache.flink.cdc.runtime.ai.AiModelClientResolver;
 import org.apache.flink.cdc.runtime.parser.JaninoCompiler;
 import org.apache.flink.cdc.runtime.parser.TransformParser;
 
@@ -30,6 +31,7 @@ import org.codehaus.janino.ExpressionEvaluator;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -50,7 +52,7 @@ public class TransformFilterProcessor {
     private final DecimalPrecisionMode decimalPrecisionMode;
     private final List<Object> udfFunctionInstances;
     private final Map<String, SupportedMetadataColumn> supportedMetadataColumns;
-    private final Map<String, AiModelClient> modelClients;
+    private final AiModelClientResolver modelClientResolver;
 
     private final TransformExpressionKey transformExpressionKey;
     private final ExpressionEvaluator expressionEvaluator;
@@ -72,7 +74,9 @@ public class TransformFilterProcessor {
         this.decimalPrecisionMode = decimalPrecisionMode;
         this.udfFunctionInstances = udfFunctionInstances;
         this.supportedMetadataColumns = supportedMetadataColumns;
-        this.modelClients = modelClients;
+        this.modelClientResolver =
+                new AiModelClientResolver(
+                        modelClients == null ? Collections.emptyMap() : modelClients);
 
         if (isNoOp) {
             this.transformExpressionKey = null;
@@ -87,7 +91,7 @@ public class TransformFilterProcessor {
                                     .toArray(new SupportedMetadataColumn[0]));
             this.expressionEvaluator =
                     TransformExpressionCompiler.compileExpression(
-                            transformExpressionKey, udfDescriptors, modelClients);
+                            transformExpressionKey, udfDescriptors);
         }
     }
 
@@ -223,8 +227,8 @@ public class TransformFilterProcessor {
         // 3 - Add UDF function instances
         params.addAll(udfFunctionInstances);
 
-        // 4 - Add AI model client instances
-        params.addAll(modelClients.values());
+        // 4 - Add AI model client resolver
+        params.add(modelClientResolver);
         return params.toArray();
     }
 

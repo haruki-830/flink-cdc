@@ -29,7 +29,17 @@ image understanding.
 
 ## AI Functions
 
-The model name must be a string constant that refers to a model declared in `pipeline.model`. Text functions require a model client that implements text generation, while embedding and image functions require their corresponding capabilities. The pipeline validates the referenced model capability before execution.
+The model argument accepts any `STRING` expression and is evaluated for each record. This enables dynamic model selection with a column, `IF`, or `CASE`. The selected name is resolved against the models declared in `pipeline.model` only when the AI function is invoked. If the selected model is undeclared or does not provide the capability required by the function, processing of that record fails at runtime.
+
+For example, the following expression chooses a model based on each record's priority:
+
+```sql
+AI_COMPLETE(
+  IF(priority = 'high', 'powerful_model', 'economical_model'),
+  content,
+  'Summarize the input'
+)
+```
 
 All text functions return `VARIANT` values parsed from the model's JSON response.
 

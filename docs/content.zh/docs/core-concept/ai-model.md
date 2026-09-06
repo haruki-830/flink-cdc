@@ -28,7 +28,17 @@ AI 模型可用于 transform 表达式中的文本生成、文本分析、embedd
 
 ## AI Functions
 
-模型名称必须是字符串常量，并引用 `pipeline.model` 中声明的模型。文本、embedding 和图片函数分别要求模型客户端实现对应的 capability；Pipeline 会在执行前校验引用模型的 capability 是否匹配。
+模型参数可以是任意 `STRING` 表达式，并会针对每条记录求值。因此可以使用字段、`IF` 或 `CASE` 动态选择模型。仅在实际调用 AI 函数时，才会根据求值结果查找 `pipeline.model` 中声明的模型；如果选中的模型未声明，或没有实现函数所需的 capability，当前记录会在运行时报错。
+
+例如，下面的表达式会根据每条记录的优先级选择模型：
+
+```sql
+AI_COMPLETE(
+  IF(priority = 'high', 'powerful_model', 'economical_model'),
+  content,
+  '总结输入内容'
+)
+```
 
 所有文本函数都会将模型返回的 JSON 解析为 `VARIANT`。
 

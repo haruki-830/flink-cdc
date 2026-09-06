@@ -119,6 +119,7 @@ public class JaninoCompiler {
 
     public static final String DEFAULT_EPOCH_TIME = "__epoch_time__";
     public static final String DEFAULT_TIME_ZONE = "__time_zone__";
+    public static final String DEFAULT_AI_MODEL_CLIENT_RESOLVER = "__ai_model_client_resolver__";
 
     private static final String[] BUILTIN_FUNCTION_MODULES = {
         "Ai", "Arithmetic", "Casting", "Comparison", "Logical", "String", "Struct", "Temporal"
@@ -264,6 +265,10 @@ public class JaninoCompiler {
         } else if (TIMEZONE_REQUIRED_TEMPORAL_CONVERSION_FUNCTIONS.contains(
                 sqlBasicCall.getOperator().getName().toUpperCase())) {
             atoms.add(new Java.AmbiguousName(Location.NOWHERE, new String[] {DEFAULT_TIME_ZONE}));
+        } else if (isAiFunction(functionName)) {
+            atoms.add(
+                    new Java.AmbiguousName(
+                            Location.NOWHERE, new String[] {DEFAULT_AI_MODEL_CLIENT_RESOLVER}));
         }
         return sqlBasicCallToJaninoRvalue(context, sqlBasicCall, atoms.toArray(new Java.Rvalue[0]));
     }
@@ -1002,13 +1007,6 @@ public class JaninoCompiler {
             return castExpressionToInferredType(
                     context, sqlBasicCall, generateFunctionOperation("element", atoms));
         } else {
-            if (isAiFunction(operationName) && atoms.length >= 1) {
-                if (!(sqlBasicCall.operand(0) instanceof SqlCharStringLiteral)) {
-                    throw new ParseException(
-                            "The model argument of an AI function must be a string constant.");
-                }
-                rewriteAiFunctionModelArg(atoms);
-            }
             return new Java.MethodInvocation(
                     Location.NOWHERE,
                     null,
@@ -1120,14 +1118,6 @@ public class JaninoCompiler {
             }
         }
         return false;
-    }
-
-    private static void rewriteAiFunctionModelArg(Java.Rvalue[] atoms) {
-        String modelName = atoms[0].toString();
-        if (modelName.startsWith("\"") && modelName.endsWith("\"")) {
-            modelName = modelName.substring(1, modelName.length() - 1);
-        }
-        atoms[0] = new Java.AmbiguousName(Location.NOWHERE, new String[] {modelName});
     }
 
     private static Java.Rvalue generateTimezoneFreeTemporalFunctionOperation(

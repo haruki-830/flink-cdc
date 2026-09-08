@@ -21,6 +21,7 @@ import org.apache.flink.cdc.common.annotation.Internal;
 import org.apache.flink.cdc.common.event.Event;
 import org.apache.flink.cdc.common.pipeline.RouteMode;
 import org.apache.flink.cdc.common.pipeline.SchemaChangeBehavior;
+import org.apache.flink.cdc.common.pipeline.SchemaCompatibilityMode;
 import org.apache.flink.cdc.common.route.RouteRule;
 import org.apache.flink.cdc.common.sink.MetadataApplier;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -43,6 +44,7 @@ public class SchemaOperatorFactory extends SimpleOperatorFactory<Event>
     private final List<RouteRule> routingRules;
     private final RouteMode routeMode;
     private final SchemaChangeBehavior schemaChangeBehavior;
+    private final SchemaCompatibilityMode schemaCompatibilityMode;
     private final Duration rpcTimeout;
 
     public SchemaOperatorFactory(
@@ -52,6 +54,24 @@ public class SchemaOperatorFactory extends SimpleOperatorFactory<Event>
             Duration rpcTimeout,
             SchemaChangeBehavior schemaChangeBehavior,
             String timezone) {
+        this(
+                metadataApplier,
+                routingRules,
+                routeMode,
+                rpcTimeout,
+                schemaChangeBehavior,
+                SchemaCompatibilityMode.SINK_DEFINED,
+                timezone);
+    }
+
+    public SchemaOperatorFactory(
+            MetadataApplier metadataApplier,
+            List<RouteRule> routingRules,
+            RouteMode routeMode,
+            Duration rpcTimeout,
+            SchemaChangeBehavior schemaChangeBehavior,
+            SchemaCompatibilityMode schemaCompatibilityMode,
+            String timezone) {
         super(
                 new SchemaOperator(
                         routingRules, routeMode, rpcTimeout, schemaChangeBehavior, timezone));
@@ -59,6 +79,7 @@ public class SchemaOperatorFactory extends SimpleOperatorFactory<Event>
         this.routingRules = routingRules;
         this.routeMode = routeMode;
         this.schemaChangeBehavior = schemaChangeBehavior;
+        this.schemaCompatibilityMode = schemaCompatibilityMode;
         this.rpcTimeout = rpcTimeout;
     }
 
@@ -72,6 +93,7 @@ public class SchemaOperatorFactory extends SimpleOperatorFactory<Event>
                 routingRules,
                 routeMode,
                 schemaChangeBehavior,
+                schemaCompatibilityMode,
                 rpcTimeout);
     }
 }

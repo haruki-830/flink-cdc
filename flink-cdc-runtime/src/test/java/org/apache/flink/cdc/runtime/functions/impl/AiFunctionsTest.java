@@ -22,7 +22,6 @@ import org.apache.flink.cdc.common.model.abilities.SupportsEmbedding;
 import org.apache.flink.cdc.common.model.abilities.SupportsImageEmbedding;
 import org.apache.flink.cdc.common.model.abilities.SupportsImageTextGeneration;
 import org.apache.flink.cdc.common.model.abilities.SupportsTextGeneration;
-import org.apache.flink.cdc.runtime.ai.AiModelClientResolver;
 
 import org.junit.jupiter.api.Test;
 
@@ -92,21 +91,23 @@ class AiFunctionsTest {
     @Test
     void testTextAiFunctionsUseEnglishPromptsAndParseJsonResponses() {
         TestModelClient model = new TestModelClient();
-        AiModelClientResolver resolver = resolver("textModel", model);
+        Map<String, AiModelClient> modelClients = modelClients("textModel", model);
 
-        assertThat(AiFunctions.aiComplete("textModel", "input", "Return three letters", resolver))
+        assertThat(
+                        AiFunctions.aiComplete(
+                                "textModel", "input", "Return three letters", modelClients))
                 .hasToString("{\"result\":\"ABC\"}");
-        assertThat(AiFunctions.aiClassify("textModel", "input", "positive,negative", resolver))
+        assertThat(AiFunctions.aiClassify("textModel", "input", "positive,negative", modelClients))
                 .hasToString("{\"result\":\"ABC\"}");
-        assertThat(AiFunctions.aiTranslate("textModel", "input", "auto", "en", resolver))
+        assertThat(AiFunctions.aiTranslate("textModel", "input", "auto", "en", modelClients))
                 .hasToString("{\"result\":\"ABC\"}");
-        assertThat(AiFunctions.aiSummarize("textModel", "input", 100, resolver))
+        assertThat(AiFunctions.aiSummarize("textModel", "input", 100, modelClients))
                 .hasToString("{\"result\":\"ABC\"}");
-        assertThat(AiFunctions.aiSentiment("textModel", "input", resolver))
+        assertThat(AiFunctions.aiSentiment("textModel", "input", modelClients))
                 .hasToString("{\"result\":\"ABC\"}");
-        assertThat(AiFunctions.aiExtract("textModel", "input", "name:string", resolver))
+        assertThat(AiFunctions.aiExtract("textModel", "input", "name:string", modelClients))
                 .hasToString("{\"result\":\"ABC\"}");
-        assertThat(AiFunctions.aiMask("textModel", "input", "email,phone", resolver))
+        assertThat(AiFunctions.aiMask("textModel", "input", "email,phone", modelClients))
                 .hasToString("{\"result\":\"ABC\"}");
 
         assertThat(model.prompts).hasSize(7);
@@ -133,9 +134,9 @@ class AiFunctionsTest {
     @Test
     void testEmbeddingFunction() {
         TestModelClient model = new TestModelClient();
-        AiModelClientResolver resolver = resolver("embeddingModel", model);
+        Map<String, AiModelClient> modelClients = modelClients("embeddingModel", model);
 
-        assertThat(AiFunctions.aiEmbed("embeddingModel", "input", resolver))
+        assertThat(AiFunctions.aiEmbed("embeddingModel", "input", modelClients))
                 .containsExactly(0.1f, 0.2f, 0.3f);
         assertThat(model.embedCalls).isOne();
     }
@@ -143,12 +144,14 @@ class AiFunctionsTest {
     @Test
     void testImageAiFunctions() {
         TestModelClient model = new TestModelClient();
-        AiModelClientResolver resolver = resolver("imageModel", model);
+        Map<String, AiModelClient> modelClients = modelClients("imageModel", model);
         byte[] image = new byte[] {1, 2, 3, 4};
 
-        assertThat(AiFunctions.aiImageComplete("imageModel", image, "Describe the image", resolver))
+        assertThat(
+                        AiFunctions.aiImageComplete(
+                                "imageModel", image, "Describe the image", modelClients))
                 .isEqualTo("image has 4 bytes, prompt: Describe the image");
-        assertThat(AiFunctions.aiImageEmbed("imageModel", image, resolver))
+        assertThat(AiFunctions.aiImageEmbed("imageModel", image, modelClients))
                 .containsExactly(0.9f, 0.8f, 0.7f);
         assertThat(model.imageTextCalls).isOne();
         assertThat(model.imageEmbedCalls).isOne();
@@ -157,44 +160,51 @@ class AiFunctionsTest {
     @Test
     void testUnsupportedCapabilities() {
         UnsupportedModelClient model = new UnsupportedModelClient();
-        AiModelClientResolver resolver = resolver("unsupported", model);
+        Map<String, AiModelClient> modelClients = modelClients("unsupported", model);
 
-        assertThatThrownBy(() -> AiFunctions.aiComplete("unsupported", "input", "prompt", resolver))
+        assertThatThrownBy(
+                        () ->
+                                AiFunctions.aiComplete(
+                                        "unsupported", "input", "prompt", modelClients))
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("Model 'unsupported'")
                 .hasMessageContaining("AI_COMPLETE")
-                .hasMessageContaining("does not support text generation");
-        assertThatThrownBy(() -> AiFunctions.aiEmbed("unsupported", "input", resolver))
+                .hasMessageContaining("does not implement SupportsTextGeneration interface");
+        assertThatThrownBy(() -> AiFunctions.aiEmbed("unsupported", "input", modelClients))
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("Model 'unsupported'")
                 .hasMessageContaining("AI_EMBED")
-                .hasMessageContaining("does not support embedding");
+                .hasMessageContaining("does not implement SupportsEmbedding interface");
         assertThatThrownBy(
                         () ->
                                 AiFunctions.aiImageComplete(
-                                        "unsupported", new byte[] {1, 2}, "describe", resolver))
+                                        "unsupported", new byte[] {1, 2}, "describe", modelClients))
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("Model 'unsupported'")
                 .hasMessageContaining("AI_IMAGE_COMPLETE")
-                .hasMessageContaining("does not support image text generation");
+                .hasMessageContaining("does not implement SupportsImageTextGeneration interface");
         assertThatThrownBy(
-                        () -> AiFunctions.aiImageEmbed("unsupported", new byte[] {1, 2}, resolver))
+                        () ->
+                                AiFunctions.aiImageEmbed(
+                                        "unsupported", new byte[] {1, 2}, modelClients))
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("Model 'unsupported'")
                 .hasMessageContaining("AI_IMAGE_EMBED")
-                .hasMessageContaining("does not support image embedding");
+                .hasMessageContaining("does not implement SupportsImageEmbedding interface");
     }
 
     @Test
     void testInvalidModelName() {
-        AiModelClientResolver resolver = new AiModelClientResolver(Collections.emptyMap());
+        Map<String, AiModelClient> modelClients = Collections.emptyMap();
 
         assertThatThrownBy(
-                        () -> AiFunctions.aiComplete("missingModel", "input", "prompt", resolver))
+                        () ->
+                                AiFunctions.aiComplete(
+                                        "missingModel", "input", "prompt", modelClients))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage(
                         "Model 'missingModel' referenced by AI_COMPLETE has not been declared.");
-        assertThatThrownBy(() -> AiFunctions.aiEmbed(null, "input", resolver))
+        assertThatThrownBy(() -> AiFunctions.aiEmbed(null, "input", modelClients))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Model name referenced by AI_EMBED must not be null.");
     }
@@ -202,12 +212,12 @@ class AiFunctionsTest {
     @Test
     void testInvalidJsonResponse() {
         TestModelClient model = new TestModelClient("not-json");
-        AiModelClientResolver resolver = resolver("model", model);
+        Map<String, AiModelClient> modelClients = modelClients("model", model);
 
         assertThatThrownBy(
                         () ->
                                 AiFunctions.aiClassify(
-                                        "model", "input", "positive,negative", resolver))
+                                        "model", "input", "positive,negative", modelClients))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("AI function AI_CLASSIFY returned invalid JSON: not-json");
     }
@@ -216,12 +226,12 @@ class AiFunctionsTest {
     void testInvalidJsonResponseIsTruncated() {
         String longInvalidJson = "x".repeat(600);
         TestModelClient model = new TestModelClient(longInvalidJson);
-        AiModelClientResolver resolver = resolver("model", model);
+        Map<String, AiModelClient> modelClients = modelClients("model", model);
 
         assertThatThrownBy(
                         () ->
                                 AiFunctions.aiClassify(
-                                        "model", "input", "positive,negative", resolver))
+                                        "model", "input", "positive,negative", modelClients))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage(
                         "AI function AI_CLASSIFY returned invalid JSON: "
@@ -232,14 +242,15 @@ class AiFunctionsTest {
     @Test
     void testNullInputSkipsModelInvocation() {
         TestModelClient model = new TestModelClient();
-        AiModelClientResolver resolver = resolver("model", model);
-        AiModelClientResolver emptyResolver = new AiModelClientResolver(Collections.emptyMap());
+        Map<String, AiModelClient> modelClients = modelClients("model", model);
+        Map<String, AiModelClient> emptyModelClients = Collections.emptyMap();
 
-        assertThat(AiFunctions.aiClassify("model", null, "positive,negative", resolver)).isNull();
-        assertThat(AiFunctions.aiEmbed("model", null, resolver)).isNull();
-        assertThat(AiFunctions.aiImageComplete("model", null, "describe", resolver)).isNull();
-        assertThat(AiFunctions.aiImageEmbed("model", null, resolver)).isNull();
-        assertThat(AiFunctions.aiComplete("missing", null, "prompt", emptyResolver)).isNull();
+        assertThat(AiFunctions.aiClassify("model", null, "positive,negative", modelClients))
+                .isNull();
+        assertThat(AiFunctions.aiEmbed("model", null, modelClients)).isNull();
+        assertThat(AiFunctions.aiImageComplete("model", null, "describe", modelClients)).isNull();
+        assertThat(AiFunctions.aiImageEmbed("model", null, modelClients)).isNull();
+        assertThat(AiFunctions.aiComplete("missing", null, "prompt", emptyModelClients)).isNull();
         assertThat(model.prompts).isEmpty();
         assertThat(model.embedCalls).isZero();
         assertThat(model.imageTextCalls).isZero();
@@ -249,13 +260,13 @@ class AiFunctionsTest {
     @Test
     void testNullModelResponseReturnsNull() {
         TestModelClient model = new TestModelClient(null);
-        AiModelClientResolver resolver = resolver("model", model);
+        Map<String, AiModelClient> modelClients = modelClients("model", model);
 
-        assertThat(AiFunctions.aiSummarize("model", "input", 100, resolver)).isNull();
+        assertThat(AiFunctions.aiSummarize("model", "input", 100, modelClients)).isNull();
         assertThat(model.prompts).hasSize(1);
     }
 
-    private static AiModelClientResolver resolver(String modelName, AiModelClient model) {
-        return new AiModelClientResolver(Map.of(modelName, model));
+    private static Map<String, AiModelClient> modelClients(String modelName, AiModelClient model) {
+        return Map.of(modelName, model);
     }
 }

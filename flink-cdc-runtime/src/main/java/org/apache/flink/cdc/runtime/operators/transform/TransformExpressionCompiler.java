@@ -18,7 +18,6 @@
 package org.apache.flink.cdc.runtime.operators.transform;
 
 import org.apache.flink.api.common.InvalidProgramException;
-import org.apache.flink.cdc.runtime.ai.AiModelClientResolver;
 import org.apache.flink.cdc.runtime.operators.transform.exceptions.TransformException;
 import org.apache.flink.cdc.runtime.parser.JaninoCompiler;
 import org.apache.flink.util.FlinkRuntimeException;
@@ -33,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The processor of the transform expression. It processes the expression of projections and
@@ -70,8 +70,8 @@ public class TransformExpressionCompiler {
                             argumentClasses.add(Class.forName(udfFunction.getClasspath()));
                         }
 
-                        argumentNames.add(JaninoCompiler.DEFAULT_AI_MODEL_CLIENT_RESOLVER);
-                        argumentClasses.add(AiModelClientResolver.class);
+                        argumentNames.add(JaninoCompiler.DEFAULT_AI_MODEL_CLIENTS);
+                        argumentClasses.add(Map.class);
 
                         // Input args
                         expressionEvaluator.setParameters(

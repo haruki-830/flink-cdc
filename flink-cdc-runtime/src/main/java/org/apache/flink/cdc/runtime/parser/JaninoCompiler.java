@@ -119,7 +119,7 @@ public class JaninoCompiler {
 
     public static final String DEFAULT_EPOCH_TIME = "__epoch_time__";
     public static final String DEFAULT_TIME_ZONE = "__time_zone__";
-    public static final String DEFAULT_AI_MODEL_CLIENT_RESOLVER = "__ai_model_client_resolver__";
+    public static final String DEFAULT_AI_MODEL_CLIENTS = "__ai_model_clients__";
 
     private static final String[] BUILTIN_FUNCTION_MODULES = {
         "Ai", "Arithmetic", "Casting", "Comparison", "Logical", "String", "Struct", "Temporal"
@@ -268,7 +268,7 @@ public class JaninoCompiler {
         } else if (isAiFunction(functionName)) {
             atoms.add(
                     new Java.AmbiguousName(
-                            Location.NOWHERE, new String[] {DEFAULT_AI_MODEL_CLIENT_RESOLVER}));
+                            Location.NOWHERE, new String[] {DEFAULT_AI_MODEL_CLIENTS}));
         }
         return sqlBasicCallToJaninoRvalue(context, sqlBasicCall, atoms.toArray(new Java.Rvalue[0]));
     }

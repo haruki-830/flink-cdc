@@ -50,8 +50,8 @@ class AiFunctionParserTest {
         assertThat(columns)
                 .extracting(ProjectionColumn::getScriptExpression)
                 .containsExactly(
-                        "aiComplete(\"completer\", $0, \"You are helpful\", __ai_model_client_resolver__)",
-                        "aiEmbed(\"embedder\", $0, __ai_model_client_resolver__)");
+                        "aiComplete(\"completer\", $0, \"You are helpful\", __ai_model_clients__)",
+                        "aiEmbed(\"embedder\", $0, __ai_model_clients__)");
         assertThat(columns)
                 .extracting(ProjectionColumn::getDataType)
                 .containsExactly(DataTypes.VARIANT(), DataTypes.ARRAY(DataTypes.FLOAT()));
@@ -71,18 +71,18 @@ class AiFunctionParserTest {
         assertThat(columns)
                 .extracting(ProjectionColumn::getScriptExpression)
                 .containsExactly(
-                        "aiClassify(\"model\", $0, \"positive,negative\", __ai_model_client_resolver__)",
+                        "aiClassify(\"model\", $0, \"positive,negative\", __ai_model_clients__)",
                         "aiTranslate(\n"
                                 + "    \"model\",\n"
                                 + "    $0,\n"
                                 + "    \"auto\",\n"
                                 + "    \"en\",\n"
-                                + "    __ai_model_client_resolver__\n"
+                                + "    __ai_model_clients__\n"
                                 + ")",
-                        "aiSummarize(\"model\", $0, 100, __ai_model_client_resolver__)",
-                        "aiSentiment(\"model\", $0, __ai_model_client_resolver__)",
-                        "aiExtract(\"model\", $0, \"name:string\", __ai_model_client_resolver__)",
-                        "aiMask(\"model\", $0, \"email,phone\", __ai_model_client_resolver__)");
+                        "aiSummarize(\"model\", $0, 100, __ai_model_clients__)",
+                        "aiSentiment(\"model\", $0, __ai_model_clients__)",
+                        "aiExtract(\"model\", $0, \"name:string\", __ai_model_clients__)",
+                        "aiMask(\"model\", $0, \"email,phone\", __ai_model_clients__)");
         assertThat(columns)
                 .extracting(ProjectionColumn::getDataType)
                 .containsOnly(DataTypes.VARIANT());
@@ -98,8 +98,8 @@ class AiFunctionParserTest {
         assertThat(columns)
                 .extracting(ProjectionColumn::getScriptExpression)
                 .containsExactly(
-                        "aiImageComplete(\"vision\", $0, \"Describe the image\", __ai_model_client_resolver__)",
-                        "aiImageEmbed(\"imageEmbedder\", $0, __ai_model_client_resolver__)");
+                        "aiImageComplete(\"vision\", $0, \"Describe the image\", __ai_model_clients__)",
+                        "aiImageEmbed(\"imageEmbedder\", $0, __ai_model_clients__)");
         assertThat(columns)
                 .extracting(ProjectionColumn::getDataType)
                 .containsExactly(DataTypes.STRING(), DataTypes.ARRAY(DataTypes.FLOAT()));
@@ -114,7 +114,7 @@ class AiFunctionParserTest {
         assertThat(columns)
                 .extracting(ProjectionColumn::getScriptExpression)
                 .containsExactly(
-                        "aiComplete(isTrue(valueEquals($0, 1)) ? \"powerful\" : \"cheap\", $1, \"prompt\", __ai_model_client_resolver__)");
+                        "aiComplete(isTrue(valueEquals($0, 1)) ? \"powerful\" : \"cheap\", $1, \"prompt\", __ai_model_clients__)");
         assertThat(columns)
                 .extracting(ProjectionColumn::getDataType)
                 .containsExactly(DataTypes.VARIANT());

@@ -23,7 +23,6 @@ import org.apache.flink.cdc.common.model.AiModelClient;
 import org.apache.flink.cdc.common.pipeline.DecimalPrecisionMode;
 import org.apache.flink.cdc.common.schema.Column;
 import org.apache.flink.cdc.common.source.SupportedMetadataColumn;
-import org.apache.flink.cdc.runtime.ai.AiModelClientResolver;
 import org.apache.flink.cdc.runtime.parser.JaninoCompiler;
 import org.apache.flink.cdc.runtime.parser.TransformParser;
 
@@ -52,7 +51,7 @@ public class TransformFilterProcessor {
     private final DecimalPrecisionMode decimalPrecisionMode;
     private final List<Object> udfFunctionInstances;
     private final Map<String, SupportedMetadataColumn> supportedMetadataColumns;
-    private final AiModelClientResolver modelClientResolver;
+    private final Map<String, AiModelClient> modelClients;
 
     private final TransformExpressionKey transformExpressionKey;
     private final ExpressionEvaluator expressionEvaluator;
@@ -74,9 +73,7 @@ public class TransformFilterProcessor {
         this.decimalPrecisionMode = decimalPrecisionMode;
         this.udfFunctionInstances = udfFunctionInstances;
         this.supportedMetadataColumns = supportedMetadataColumns;
-        this.modelClientResolver =
-                new AiModelClientResolver(
-                        modelClients == null ? Collections.emptyMap() : modelClients);
+        this.modelClients = modelClients == null ? Collections.emptyMap() : modelClients;
 
         if (isNoOp) {
             this.transformExpressionKey = null;
@@ -227,8 +224,8 @@ public class TransformFilterProcessor {
         // 3 - Add UDF function instances
         params.addAll(udfFunctionInstances);
 
-        // 4 - Add AI model client resolver
-        params.add(modelClientResolver);
+        // 4 - Add AI model clients
+        params.add(modelClients);
         return params.toArray();
     }
 
